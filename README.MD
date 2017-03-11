@@ -11,8 +11,14 @@ PS: this is one of the reasons for me to share the software.
 ```
 
 # License
-This software including (source code, scripts, .., etc) within this repository and its subfolders are licensed under CRAPL license. Please refer the LICENSE file for more information
+This software including (source code, scripts, .., etc) within this repository and its subfolders are licensed under CRAPL license.
+```
+Please refer the LICENSE file for more information
+```
 
 # CopyRight Notice
-The Copyright of this repository and its subfolders are held exclusively by "Ahmed Mohamed Abdelmoniem Sayed", for any inquiries contact me at (ahmedcs982@gmail.com, amas@cse.ust.hk or ahmedcs@aun.edu.eg).
-Any USE or Modification to the (source code, scripts, .., etc) included in this repository is permitted except for the COPYRIGHT notice at the header of the files.
+The Copyright of this repository and its subfolders are held exclusively by "Ahmed Mohamed Abdelmoniem Sayed", for any inquiries contact me at (ahmedcs982@gmail.com).
+Any USE or Modification to the (source code, scripts, .., etc) included in this repository is permitted.
+```
+However, the COPYRIGHT notice at the header of the (source, header and script) files can not be removed or modified.
+```
