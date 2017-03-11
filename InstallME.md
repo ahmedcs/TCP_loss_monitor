@@ -15,7 +15,7 @@ make
 
 Now the output files is as follows:
 ```
-loss_probe.o \& loss_probe.ko
+loss_probe.o and loss_probe.ko
 ```
 The file ending with .o is the object file while the one ending in .ko is the module file
 
@@ -32,9 +32,9 @@ sudo cat /proc/net/lossprobe1 >> lossprobe1.out;
 sudo cat /proc/net/lossprobe1 >> lossprobe2.out;
 ```
 
-Note that the parameters of the module are:
-1- port: the TCP port number of applications that needs to be tracked, 0 is the default which tracks all ports.
-2- bufsize: the capture buffer size used by the module 4 KBytes is the default.
+Note that the parameters of the module are:  
+1- port: the TCP port number of applications that needs to be tracked, 0 is the default which tracks all ports.  
+2- bufsize: the capture buffer size used by the module 4 KBytes is the default.  
 
 However to call the module with different parameters issue the following:
 ```
