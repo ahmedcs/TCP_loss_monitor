@@ -13,7 +13,7 @@ PS: this is one of the reasons for me to share the software.
 # License
 This software including (source code, scripts, .., etc) within this repository and its subfolders are licensed under CRAPL license.
 ```
-Please refer the LICENSE file for more information
+Please refer to the LICENSE file for more information
 ```
 
 # CopyRight Notice
