@@ -1,5 +1,18 @@
 /*
  * lossprobe - Observe the TCP flow with jprobes.
+ *
+ *  Author: Ahmed Mohamed Abdelmoniem Sayed, <ahmedcs982@gmail.com, github:ahmedcs>
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of CRAPL LICENCE avaliable at
+ *    http://matt.might.net/.
+ *
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+ *  See the CRAPL LICENSE for more details.
+ *
+ * Please READ carefully the attached README and LICENCE file with this software
  */
 
 #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
@@ -22,24 +35,16 @@
 
 MODULE_AUTHOR("Ahmed Sayed <ahmedcs982@gmail.com");
 MODULE_DESCRIPTION("TCP loss events tracker");
-MODULE_LICENSE("GPL");
-MODULE_VERSION("1.1");
+MODULE_LICENSE("CRAPL");
+MODULE_VERSION("1.0");
 
-static int port __read_mostly;
+static int port __read_mostly = 0;
 MODULE_PARM_DESC(port, "Port to match (0=all)");
 module_param(port, int, 0);
 
 static unsigned int bufsize __read_mostly = 4096;
 MODULE_PARM_DESC(bufsize, "Log buffer size in packets (4096)");
 module_param(bufsize, uint, 0);
-
-static unsigned int fwmark __read_mostly;
-MODULE_PARM_DESC(fwmark, "skb mark to match (0=no mark)");
-module_param(fwmark, uint, 0);
-
-static int full __read_mostly;
-MODULE_PARM_DESC(full, "Full log (1=every ack packet received,  0=only cwnd changes)");
-module_param(full, int, 0);
 
 static const char procname1[] = "lossprobe1";
 static const char procname2[] = "lossprobe2";
@@ -61,11 +66,6 @@ static u32 flow[4];
 
 static inline int hash(const struct inet_sock *inet, const struct inet_request_sock *ireq)
 {
-    //return a value in [0,SIZE-1]=1
-    /*if(ireq)
-        return ( (ireq->ir_loc_addr%SIZE+1) * (ireq->ir_rmt_addr%SIZE+1) * ( ireq->ir_rmt_port%SIZE+1) * (inet->inet_sport%SIZE+1) ) % SIZE;
-    else
-        return ( (inet->inet_saddr%SIZE+1) * (inet->inet_daddr%SIZE+1) * ( inet->inet_sport%SIZE+1) * (inet->inet_dport%SIZE+1) ) % SIZE;*/
      u32 temp_hash, temp_hash1, temp_hash2;
      if(ireq)
      {
@@ -73,19 +73,13 @@ static inline int hash(const struct inet_sock *inet, const struct inet_request_s
         flow[1] = (u32) ireq->ir_rmt_addr;
         flow[2] = (u32) inet->inet_sport;
         flow[3] =  (u32) ireq->ir_rmt_port;
-        //flow[4] =  (u32) inet->inet_id;
-        /*temp_hash1 = (ireq->ir_loc_addr) * (ireq->ir_rmt_addr) ;
-        temp_hash2 = ( ireq->ir_rmt_port) * (inet->inet_sport);*/
-     }
+    }
     else
     {
         flow[0] = (u32) inet->inet_saddr;
         flow[1] = (u32) inet->inet_daddr;
         flow[2] = (u32) inet->inet_sport;
         flow[3] =  (u32) inet->inet_dport;
-         //flow[4] =  (u32) inet->inet_id;
-        /*temp_hash1 =  (inet->inet_saddr) * (inet->inet_daddr);
-        temp_hash2 = ( inet->inet_sport) * (inet->inet_dport);*/
     }
 
     temp_hash = jhash2(flow, 4, 0); //hash_seed);
@@ -110,12 +104,6 @@ struct tcp_log
 
     ktime_t tstamp;
     struct timespec tspec;
-
-    /*union
-    {
-        __be32 ip;
-        __be16 port;
-    }	src, dst;*/
     __be32 sip,dip;
     __be16 sport,dport;
     u16	length, pkt_count, cur_mss;
@@ -268,17 +256,6 @@ bool fill_log(struct tcp_log *p, struct sock * sk, struct sk_buff * skb, int typ
     if(skb)
     {
         p->length = skb->len;
-        //p->ack_seq = TCP_SKB_CB(skb)->ack_seq - p->init_ack;
-        /*ip= (struct iphdr *)skb_network_header(skb);
-        if(ip && ip->ihl)
-            th = (struct tcphdr *)((__u32 *)ip+ ip->ihl);
-        else
-        {
-           th = tcp_hdr(skb);
-           //pr_info("ERROR: %d [%pI4:%d->%pI4:%d] No IP HEADER INIT seq %#x:%#x:%#x \n", p->index, &inet->inet_saddr, ntohs(inet->inet_sport), &inet->inet_daddr, ntohs(inet->inet_dport), p->init_seq, TCP_SKB_CB(skb)->seq, TCP_SKB_CB(skb)->ack_seq );
-        }*/
-
-
         seq = p->pkt_aseq =  TCP_SKB_CB(skb)->seq; //(th && type > 2) ? th->seq :
         ack = p->ack_aseq =  TCP_SKB_CB(skb)->ack_seq; //(th && type > 2) ? th->ack_seq :
         p->pkt_count = 0;
@@ -299,24 +276,11 @@ bool fill_log(struct tcp_log *p, struct sock * sk, struct sk_buff * skb, int typ
         else
         {
             p->pkt_count=tcp_skb_pcount(skb);
-            if(p->cur_mss)
-            {
-                /*int new_count = (new_seq - p->pkt_seq) / p->cur_mss; //(tp->snd_nxt - p->snd_nxt) / p->cur_mss ;
-                p->pkt_count = new_count - p->pkt_count;
-                if( ((new_seq - p->pkt_seq) % p->cur_mss) > 0) //((tp->snd_nxt - p->snd_nxt) % p->cur_mss > 0)
-                     p->pkt_count++;*/
-            }
-
-            /*if(new_seq >=  0)
-                  p->pkt_seq = TCP_SKB_CB(skb)->seq - p->init_seq;
-            else
-                  p->pkt_seq = MAX_INT - TCP_SKB_CB(skb)->seq - p->init_seq;*/
             if( (signed) seq - p->init_seq >= 0)
                 p->pkt_seq = seq - p->init_seq;
             else
                 p->pkt_seq = MAX_INT - seq - p->init_seq;
             p->ack_seq = 0;
-            //p->pkt_seq = TCP_SKB_CB(skb)->seq - p->init_seq;
             if(ack)
             {
                 if((signed) (ack - p->init_ack) >= 0)
@@ -353,11 +317,6 @@ bool fill_log(struct tcp_log *p, struct sock * sk, struct sk_buff * skb, int typ
             p->maxrecovperiod = p->recovperiod;
           p->retranstime = 0;
     }
-
-    /*p->snd_nxt = tp->snd_nxt;
-    p->snd_una = tp->snd_una;
-
-    p->rcv_nxt = tp->rcv_nxt;*/
 
     if((signed) (tp->snd_nxt - p->init_seq) >= 0)
        p->snd_nxt= tp->snd_nxt - p->init_seq;
@@ -427,18 +386,12 @@ void jtcp_set_state(struct sock *sk, int state)
 
     int oldstate = sk->sk_state;
 
-    /*if(state == TCP_ESTABLISHED)
-             pr_info("BOPEN [%pI4:%d->%pI4:%d] Init seq %#x old:%#x new:%#x\n", &inet->inet_saddr, ntohs(inet->inet_sport), &inet->inet_daddr, ntohs(inet->inet_dport), tp->snd_nxt, oldstate, state  );
-    else if(state == TCP_CLOSE)
-              pr_info("BCLOSE [%pI4:%d->%pI4:%d] Init seq %#x old:%#x new:%#x\n", &inet->inet_saddr, ntohs(inet->inet_sport), &inet->inet_daddr, ntohs(inet->inet_dport), tp->snd_nxt, oldstate, state );
-    */
-
    if (state == TCP_ESTABLISHED && (oldstate !=  TCP_SYN_SENT && oldstate!= TCP_SYN_RECV))
                goto out;
    else if (state == TCP_CLOSE &&  (oldstate != TCP_LAST_ACK && oldstate != TCP_FIN_WAIT2)) //&&  oldstate != TCP_TIME_WAIT
                 goto out;
 
-    if ( (port == 0 ||  ntohs(inet->inet_dport) == port ||  ntohs(inet->inet_sport) == port) && full)
+    if ( (port == 0 ||  ntohs(inet->inet_dport) == port ||  ntohs(inet->inet_sport) == port))
     {
         unsigned int k = hash(inet, NULL);
         if(k>=SIZE || k<0)
@@ -503,8 +456,8 @@ out:
     jprobe_return();
 }
 /*
- * Hook inserted to be called before each receive packet.
- * Note: arguments must match tcp_rcv_established()!
+ * Hook inserted to be called when jtcp_v4_do_rcv at each TCP packet arrival.
+ * Note: arguments must match jtcp_v4_do_rcv()!
  */
 
 static void jtcp_v4_do_rcv(struct sock *sk, struct sk_buff *skb)
@@ -520,8 +473,7 @@ static void jtcp_v4_do_rcv(struct sock *sk, struct sk_buff *skb)
         th = tcp_hdr(skb);
 
     // ---- Only update if port or skb mark matches
-    if ( skb && (port == 0 ||  ntohs(th->dest) == port || ntohs(th->source) == port) && full) //||  ntohs(inet->inet_dport) == port
-    {
+    if (skb && (port == 0 ||  ntohs(th->dest) == port || ntohs(th->source) == port))
         //pr_info("RCVSKB [%pI4:%d->%pI4:%d] len:%d seq:%u:%u flags:%#x\n", &ip_hdr(skb)->saddr, ntohs(th->source), &ip_hdr(skb)->daddr, ntohs(th->dest), skb->len, TCP_SKB_CB(skb)->seq, TCP_SKB_CB(skb)->ack_seq, TCP_SKB_CB(skb)->tcp_flags  );
 
 
@@ -566,7 +518,6 @@ static void jtcp_v4_do_rcv(struct sock *sk, struct sk_buff *skb)
 
         if (tcp_probe_avail2() > 1)
         {
-            //pr_info("TCP retransmit %pISpc -> %pISpc has been called \n", &p->src, &p->dst);
             struct tcp_log *pp = tcp_probe2.log + tcp_probe2.head;
 
             p->ptype = p->type;
@@ -578,13 +529,7 @@ static void jtcp_v4_do_rcv(struct sock *sk, struct sk_buff *skb)
                         p->type = 8;
                     else if(dupack)
                         p->type=9;
-                    //pr_info("ACK index:%d:%d [%pI4:%d->%pI4:%d] len:%d seq:%u:%u aseq:%d flags:%#x\n", k, p->index, &ip_hdr(skb)->saddr, ntohs(th->source), &ip_hdr(skb)->daddr, ntohs(th->dest), skb->len, TCP_SKB_CB(skb)->seq, TCP_SKB_CB(skb)->ack_seq, TCP_SKB_CB(skb)->ack_seq - p->init_seq, TCP_SKB_CB(skb)->tcp_flags  );
              }
-             /*else {
-                    pp->type = 6; //Recieve DATA
-                    //pr_info("DATA index:%d:%d [%pI4:%d->%pI4:%d] len:%d seq:%u:%u aseq:%d flags:%#x\n", k, p->index, &ip_hdr(skb)->saddr, ntohs(th->source), &ip_hdr(skb)->daddr, ntohs(th->dest), skb->len, TCP_SKB_CB(skb)->seq, TCP_SKB_CB(skb)->ack_seq, TCP_SKB_CB(skb)->ack_seq - p->init_seq, TCP_SKB_CB(skb)->tcp_flags  );
-
-             }*/
              if(open)
                 p->type = 10;
              else if(close)
@@ -600,8 +545,6 @@ static void jtcp_v4_do_rcv(struct sock *sk, struct sk_buff *skb)
 
             tcp_probe2.head = (tcp_probe2.head + 1) & (bufsize - 1);
         }
-        //else
-        //   pr_info("NOSPACE index:%d:%d [%pI4:%d->%pI4:%d] len:%d seq:%u:%u flags:%#x\n", k, p->index, &inet->inet_saddr, ntohs(inet->inet_sport), &inet->inet_daddr, ntohs(inet->inet_dport), skb->len, TCP_SKB_CB(skb)->seq, TCP_SKB_CB(skb)->ack_seq, TCP_SKB_CB(skb)->tcp_flags  );
 
         if(close)
               reset_log(p);
@@ -614,83 +557,15 @@ out:
     jprobe_return();
 }
 
-/*static void jtcp_rcv_established(struct sock *sk, struct sk_buff *skb, const struct tcphdr *th, unsigned int len)
-{
-
-    const struct tcp_sock *tp = tcp_sk(sk);
-    const struct inet_sock *inet = inet_sk(sk);
-    struct inet_connection_sock *icsk = inet_csk(sk);
-    bool open = false, close = false;
-
-
-    // ---- Only update if port or skb mark matches
-    if ( (port == 0 ||  ntohs(th->dest) == port || ntohs(th->source) == port) && full) //||  ntohs(inet->inet_dport) == port
-    {
-        //pr_info("RCVSKB [%pI4:%d->%pI4:%d] len:%d seq:%u:%u flags:%#x\n", &ip_hdr(skb)->saddr, ntohs(th->source), &ip_hdr(skb)->daddr, ntohs(th->dest), skb->len, TCP_SKB_CB(skb)->seq, TCP_SKB_CB(skb)->ack_seq, TCP_SKB_CB(skb)->tcp_flags  );
-
-
-        int k=hash(inet, NULL);
-        if(k>=SIZE || k<0)
-            goto out;
-        struct tcp_log *p = &logarr[k];
-
-        if(p->index == -1)
-        {
-            pr_info("OPPS:CLOSED index:%d:%d [%pI4:%d->%pI4:%d] len:%d seq:%u:%u flags:%#x\n", k, p->index, &inet->inet_saddr, ntohs(inet->inet_sport), &inet->inet_daddr, ntohs(inet->inet_dport), skb->len, TCP_SKB_CB(skb)->seq, TCP_SKB_CB(skb)->ack_seq, TCP_SKB_CB(skb)->tcp_flags  );
-            goto out;
-        }
-
-        fill_log(p, tp , skb, 1);
-
-        spin_lock(&tcp_probe.lock);
-
-        if (tcp_probe_avail() > 1)
-        {
-            //pr_info("TCP retransmit %pISpc -> %pISpc has been called \n", &p->src, &p->dst);
-            struct tcp_log *pp = tcp_probe.log + tcp_probe.head;
-
-            *pp = *p;
-
-             pp->type = 0;
-             if(th->ack && skb->len<=80)
-             {
-                    pp->type = 8; //Recieve ACK
-                    pr_info("ACK index:%d:%d [%pI4:%d->%pI4:%d] len:%d seq:%u:%u aseq:%d flags:%#x\n", k, p->index, &ip_hdr(skb)->saddr, ntohs(th->source), &ip_hdr(skb)->daddr, ntohs(th->dest), skb->len, TCP_SKB_CB(skb)->seq, TCP_SKB_CB(skb)->ack_seq, TCP_SKB_CB(skb)->ack_seq - p->init_seq, TCP_SKB_CB(skb)->tcp_flags  );
-             }
-             else {
-                    pp->type = 7; //Recieve DATA
-                    pr_info("DATA index:%d:%d [%pI4:%d->%pI4:%d] len:%d seq:%u:%u aseq:%d flags:%#x\n", k, p->index, &ip_hdr(skb)->saddr, ntohs(th->source), &ip_hdr(skb)->daddr, ntohs(th->dest), skb->len, TCP_SKB_CB(skb)->seq, TCP_SKB_CB(skb)->ack_seq, TCP_SKB_CB(skb)->ack_seq - p->init_seq, TCP_SKB_CB(skb)->tcp_flags  );
-
-             }
-
-             tcp_probe.head = (tcp_probe.head + 1) & (bufsize - 1);
-        }
-        else
-           pr_info("NOSPACE index:%d:%d [%pI4:%d->%pI4:%d] len:%d seq:%u:%u flags:%#x\n", k, p->index, &inet->inet_saddr, ntohs(inet->inet_sport), &inet->inet_daddr, ntohs(inet->inet_dport), skb->len, TCP_SKB_CB(skb)->seq, TCP_SKB_CB(skb)->ack_seq, TCP_SKB_CB(skb)->tcp_flags  );
-
-        spin_unlock(&tcp_probe.lock);
-
-         wake_up(&tcp_probe.wait);
-
-    }
-out:
-    jprobe_return();
-}*/
-
-
 int jtcp_retransmit_skb(struct sock * sk, struct sk_buff * skb)
 {
 
-    //if(ca_state != TCP_CA_Loss)
-    //    return;
-
     const struct tcp_sock *tp = tcp_sk(sk);
     const struct inet_sock *inet = inet_sk(sk);
     struct inet_connection_sock *icsk = inet_csk(sk);
-    //struct request_sock *req = inet_reqsk(sk);
 
     /* Only update if port or skb mark matches */
-    if (skb && ( port == 0 ||  ntohs(inet->inet_dport) == port ||  ntohs(inet->inet_sport) == port) && (full))  //tp->snd_cwnd != tcp_probe.lastcwnd)) {
+    if (skb && ( port == 0 ||  ntohs(inet->inet_dport) == port ||  ntohs(inet->inet_sport) == port))  //tp->snd_cwnd != tcp_probe.lastcwnd)) {
     {
 
         int k=hash(inet, NULL);
@@ -718,7 +593,6 @@ int jtcp_retransmit_skb(struct sock * sk, struct sk_buff * skb)
             }
             else //if(icsk->icsk_ca_state == TCP_CA_Recovery)
             {
-                //p->length = TCP_SKB_CB(skb)->seq - TCP_SKB_CB(skb)->end_seq;
                 p->type = 2; //SLOW Start Timeout
                 //pr_info("TIMEOUT index:%d:%d [%pI4:%d->%pI4:%d] Init seq %#x, current seq %#x actual %d\n", k, p->index, &inet->inet_saddr, ntohs(inet->inet_sport), &inet->inet_daddr, ntohs(inet->inet_dport), p->init_seq, TCP_SKB_CB(skb)->seq, TCP_SKB_CB(skb)->seq - p->init_seq);
             }
@@ -735,71 +609,15 @@ out:
     jprobe_return();
 }
 
-/*int jip_queue_xmit(struct sock *sk, struct sk_buff *skb, struct flowi *fl)
-{
-    const struct tcp_sock *tp = tcp_sk(sk);
-    const struct inet_sock *inet = inet_sk(sk);
-    struct inet_connection_sock *icsk = inet_csk(sk);
-    //struct request_sock *req = inet_reqsk(sk);
-    struct tcphdr* th;
-
-    //---- Only update if port matches
-    if (sk->sk_protocol == IPPROTO_TCP && skb && (port == 0 ||  ntohs(inet->inet_dport) == port ||  ntohs(inet->inet_sport) == port) && (full))  //tp->snd_cwnd != tcp_probe.lastcwnd)) {
-    {
-        int k=hash(inet, NULL);
-        if(k>=SIZE || k<0)
-            goto out;
-        struct tcp_log *p = &logarr[k];
-
-        th = tcp_hdr(skb);
-        //pr_info("Restransmit index:%d [%pI4:%d->%pI4:%d] Initial sequence number is %#x\n", k, &inet->inet_saddr, ntohs(inet->inet_sport), &inet->inet_daddr, ntohs(inet->inet_dport), p->init_seq);
-        if(p->index==-1 ||  (skb->len<=80 && th->ack)) //|| !tcp_any_retrans_done(sk))//|| p->snd_nxt == tp->snd_nxt)
-           goto out;
-
-        fill_log(p, tp, skb, 2);
-
-        //if(skb_is_nonlinear(skb))
-         //   skb_linearize(skb);
-
-        spin_lock(&tcp_probe.lock);
-        //--- If log fills, just silently drop
-
-        if (tcp_probe_avail() > 1 && p->type != 2 && p->type != 3)
-        {
-            //pr_info("TCP retransmit %pISpc -> %pISpc has been called \n", &p->src, &p->dst);
-            struct tcp_log *pp = tcp_probe.log + tcp_probe.head;
-
-            if(TCP_SKB_CB(skb)->sacked & TCPCB_RETRANS)
-                p->type=2;
-            else if(TCP_SKB_CB(skb)->sacked & TCPCB_LOST || p->rcv_tstamp > MIN_TIMEOUT)
-                p->type = 3;
-            else
-                p->type = 1;
-            *pp = *p;
-
-            tcp_probe.head = (tcp_probe.head + 1) & (bufsize - 1);
-        }
-        tcp_probe.lastcwnd = tp->snd_cwnd;
-        tcp_probe.last_lostout = tp->lost_out;
-
-        spin_unlock(&tcp_probe.lock);
-
-         wake_up(&tcp_probe.wait);
-    }
-out:
-    jprobe_return();
-}*/
-
 void jtcp_v4_send_check(struct sock *sk, struct sk_buff *skb)
 {
     const struct tcp_sock *tp = tcp_sk(sk);
     const struct inet_sock *inet = inet_sk(sk);
     struct inet_connection_sock *icsk = inet_csk(sk);
     bool rxmit=false, fxmit=false;
-    //struct request_sock *req = inet_reqsk(sk);
 
     //---- Only update if port matches
-    if (skb && ( port == 0 ||  ntohs(inet->inet_dport) == port ||  ntohs(inet->inet_sport) == port) && (full))  //tp->snd_cwnd != tcp_probe.lastcwnd)) {
+    if (skb && ( port == 0 ||  ntohs(inet->inet_dport) == port ||  ntohs(inet->inet_sport) == port))  //tp->snd_cwnd != tcp_probe.lastcwnd)) {
     {
         int k=hash(inet, NULL);
         if(k>=SIZE || k<0)
@@ -818,11 +636,9 @@ void jtcp_v4_send_check(struct sock *sk, struct sk_buff *skb)
         {
             if(p->retrans_stamp >= MIN_TIMEOUT)//!tp->flight_pkts)
                 rxmit=true;
-            else //oldretranshigh && (p->pkt_aseq == oldretranshigh))
+            else
                 fxmit=true;
         }
-        /*if(skb_is_nonlinear(skb))
-            skb_linearize(skb);*/
 
         spin_lock(&tcp_probe1.lock);
         //--- If log fills, just silently drop
@@ -831,14 +647,6 @@ void jtcp_v4_send_check(struct sock *sk, struct sk_buff *skb)
         {
             //pr_info("TCP retransmit %pISpc -> %pISpc has been called \n", &p->src, &p->dst);
             struct tcp_log *pp = tcp_probe1.log + tcp_probe1.head;
-
-            //if( ((p->type!=2 && p->type!=3) || p->ptype==2 || p->ptype==3) && !(TCP_SKB_CB(skb)->sacked & TCPCB_LOST))
-            //{
-                //p->ptype=p->type;
-                //p->type = 1;
-            //}
-            //else
-            //    p->ptype=p->type;
              p->ptype=p->type;
              if(rxmit)
                 p->type=12;
@@ -870,11 +678,9 @@ static struct jprobe tcp_jprobe1 =
 static struct jprobe tcp_jprobe2 =
 {
     .kp = {
-        //.symbol_name	= "tcp_make_synack",
         .symbol_name	= "tcp_set_state",
 
     },
-    //.entry	= jtcp_make_synack,
     .entry  = jtcp_set_state,
 };
 
@@ -882,19 +688,15 @@ static struct jprobe tcp_jprobe3 =
 {
     .kp = {
         .symbol_name	= "tcp_v4_send_check",
-        //.symbol_name    = "ip_queue_xmit",
     },
     .entry	= jtcp_v4_send_check,
-    //.entry  = jip_queue_xmit,
 };
 
 static struct jprobe tcp_jprobe4 =
 {
     .kp = {
-        //.symbol_name	= "tcp_rcv_established",
         .symbol_name    = "tcp_v4_do_rcv",
     },
-    //.entry	= jtcp_rcv_established,
     .entry      = jtcp_v4_do_rcv,
 };
 
@@ -904,12 +706,6 @@ static int lossprobe_open1(struct inode *inode, struct file *file)
     /* Reset (empty) log */
     spin_lock_bh(&tcp_probe1.lock);
     tcp_probe1.head = tcp_probe1.tail = 0;
-    /*if(ktime_to_ns(tcp_probe2.start) > 0)
-        tcp_probe1.start = tcp_probe2.start;
-    else  if(ktime_to_ns(tcp_probe3.start) > 0)
-            tcp_probe3.start = tcp_probe3.start;
-    else
-        tcp_probe1.start = ktime_get();*/
     spin_unlock_bh(&tcp_probe1.lock);
 
     return 0;
@@ -920,12 +716,6 @@ static int lossprobe_open2(struct inode *inode, struct file *file)
     /* Reset (empty) log */
     spin_lock_bh(&tcp_probe2.lock);
     tcp_probe2.head = tcp_probe2.tail = 0;
-    /*if(ktime_to_ns(tcp_probe1.start) > 0)
-        tcp_probe2.start = tcp_probe1.start;
-    else  if(ktime_to_ns(tcp_probe3.start) > 0)
-            tcp_probe3.start = tcp_probe3.start;
-    else
-        tcp_probe2.start = ktime_get();*/
     spin_unlock_bh(&tcp_probe2.lock);
 
     return 0;
@@ -936,12 +726,6 @@ static int lossprobe_open3(struct inode *inode, struct file *file)
     /* Reset (empty) log */
     spin_lock_bh(&tcp_probe3.lock);
     tcp_probe3.head = tcp_probe3.tail = 0;
-    /*if(ktime_to_ns(tcp_probe1.start) > 0)
-        tcp_probe3.start = tcp_probe1.start;
-    else if(ktime_to_ns(tcp_probe2.start) > 0)
-            tcp_probe3.start = tcp_probe2.start;
-    else
-        tcp_probe3.start = ktime_get();*/
     spin_unlock_bh(&tcp_probe3.lock);
 
     return 0;
@@ -1122,16 +906,6 @@ static int lossprobe_sprint3(char *tbuf, int n)
                          p->pkt_seq,p->ack_seq, p->retransmit_high, p->packets_out, p->retrans_out,  p->lost_out,
 			             p->total_retrans, p->undo_retrans, p->lsndtime, p->rcv_tstamp, p->retrans_stamp, p->recovperiod, p->maxrecovperiod,
 			             p->init_seq ,  p->pkt_aseq,  p->retransmit_ahigh, p->init_ack, p->pkt_aseq);
-    /*else if(p->type==6)
-        return scnprintf(tbuf, n,
-                         "%.2lu:%.2lu:%.2lu:%.6lu RESET %d %lu.%09lu %pI4 %d %pI4 %d %d %d %d %u %u %u %u %u %u %u %u %u %u %u %u %u %u %u %u %u %d %d %d %d %d %d %u %u %u %u %u\n",
-                         ( ((tv.tv_sec / 3600) + 8) % (24) ) , (tv.tv_sec / 60) % (60), tv.tv_sec % 60, tv.tv_nsec / 1000,
-                          p->index, (unsigned long)tv1.tv_sec, (unsigned long)tv1.tv_nsec,
-                         &p->sip, ntohs(p->sport), &p->dip, ntohs(p->dport), p->length, p->cur_mss, p->pkt_count, p->snd_nxt, p->snd_una, p->rcv_nxt,
-                         p->snd_cwnd, p->flight_pkts, p->ssthresh, p->snd_wnd, p->srtt, p->rttvar_us, p->rcv_wnd,
-                         p->pkt_seq,p->ack_seq, p->retransmit_high, p->packets_out, p->retrans_out,  p->lost_out,
-			             p->total_retrans, p->undo_retrans, p->lsndtime, p->rcv_tstamp, p->retrans_stamp, p->recovperiod, p->maxrecovperiod,
-			             p->init_seq ,  p->pkt_aseq,  p->retransmit_ahigh, p->init_ack, p->pkt_aseq);*/
 }
 
 static ssize_t lossprobe_read1(struct file *file, char __user *buf, size_t len, loff_t *ppos)
@@ -1307,13 +1081,11 @@ static __init int lossprobe_init(void)
 {
     int ret = -ENOMEM, i;
 
-    /* Warning: if the function signature of tcp_rcv_established,
-     * has been changed, you also have to change the signature of
-     * jtcp_rcv_established, otherwise you end up right here!
+    /* Warning: if the function signature (declaration) of tcp_v4_do_rcv or any probed function,
+     * has been changed in the current kernel, you also have to change the signature of
+     * jtcp_v4_do_rcv or j(other functions) being probed, otherwise you end up right here!
      */
     BUILD_BUG_ON(__same_type(tcp_v4_do_rcv, jtcp_v4_do_rcv == 0));
-    //BUILD_BUG_ON(__same_type(tcp_rcv_established, jtcp_rcv_established) == 0);
-    //BUILD_BUG_ON(__same_type(ip_queue_xmit, jip_queue_xmit) == 0);
     BUILD_BUG_ON(__same_type(tcp_v4_send_check, jtcp_v4_send_check) == 0);
     BUILD_BUG_ON(__same_type(tcp_retransmit_skb, jtcp_retransmit_skb) == 0);
     BUILD_BUG_ON(__same_type(tcp_set_state, jtcp_set_state) == 0);
@@ -1381,7 +1153,7 @@ static __init int lossprobe_init(void)
     get_random_bytes(&hash_seed, sizeof(u32));
 
 
-    pr_info("probe registered (port=%d/fwmark=%u/full=%u) bufsize=%u, size=%u, max_int=%u\n", port, fwmark, full, bufsize, SIZE, MAX_INT);
+    pr_info("probe registered (port=%d, bufsize=%u, size=%u, max_int=%u)\n", port, bufsize, SIZE, MAX_INT);
     return 0;
 err1:
     pr_info("Could not register the requested jprobe\n");

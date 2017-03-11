@@ -1,4 +1,18 @@
-A TCP module for monitoring TCP sockets for loss events such as Fast Retransmit and RTO
-The module relies on leveraging Kprobes for hooking into TCP function calls of interest.
+# LossProbe
+LossProbe is a TCP socket-level events monitor tools that probes TCP sockets for various state of interest and dumps the values to the proc file system. It implemented as a load-able Linux-Kernel Module which can be easily inserted into kernel via insmod command
 
-License Information
+# Installation Guide
+Please Refer to the InstallMe file for more information about installation and possible usage scenarios.
+
+#Feedback
+I always welcome and love to have feedback on the program or any possible improvements, please do not hesitate to contact me by commenting on the code or dropping me an email at ahmedcs982@gmail.com.  
+```
+PS: this is one of the reasons for me to share the software.
+```
+
+# License
+This software including (source code, scripts, .., etc) within this repository and its subfolders are licensed under CRAPL license. Please refer the LICENSE file for more information
+
+# CopyRight Notice
+The Copyright of this repository and its subfolders are held exclusively by "Ahmed Mohamed Abdelmoniem Sayed", for any inquiries contact me at (ahmedcs982@gmail.com, amas@cse.ust.hk or ahmedcs@aun.edu.eg).
+Any USE or Modification to the (source code, scripts, .., etc) included in this repository is permitted except for the COPYRIGHT notice at the header of the files.
