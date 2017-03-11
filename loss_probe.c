@@ -5,7 +5,8 @@
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of CRAPL LICENCE avaliable at
- *    http://matt.might.net/.
+ *    http://matt.might.net/articles/crapl/.
+ *    http://matt.might.net/articles/crapl/CRAPL-LICENSE.txt
  *
  * This program is distributed in the hope that it will be useful, but
  * WITHOUT ANY WARRANTY; without even the implied warranty of
