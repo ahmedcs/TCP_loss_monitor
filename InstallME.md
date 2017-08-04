@@ -29,7 +29,7 @@ Now the module will probe fast-retransmit and retransmission timeout events and 
 
 ```
 sudo cat /proc/net/lossprobe1 >> lossprobe1.out;
-sudo cat /proc/net/lossprobe1 >> lossprobe2.out;
+sudo cat /proc/net/lossprobe2 >> lossprobe2.out;
 ```
 
 Note that the parameters of the module are:  
